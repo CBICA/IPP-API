@@ -10,7 +10,7 @@ from flask_cors import CORS, cross_origin
 from werkzeug.utils import secure_filename
 
 schema = """
-CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, email TEXT UNIQUE, password TEXT, token TEXT unique);
+CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, email TEXT UNIQUE, password TEXT, token TEXT unique, token_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS experiments (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, uid INTEGER, label TEXT, status INTEGER, created TIMESTAMP DEFAULT CURRENT_TIMESTAMP);
 -- type =  1 (input) 2 (output)
 CREATE TABLE IF NOT EXISTS files (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, path TEXT, type INTEGER);
@@ -54,7 +54,7 @@ def create_app(test_config=None):
     def is_authd(db, args):
         if args.get('token'):
             res = db.execute(
-                "SELECT COUNT(*) FROM users WHERE token = ?", (args.get('token'),)).fetchone()
+                "SELECT COUNT(*) FROM users WHERE token = ? AND token_created >= date('now', '-1 days')", (args.get('token'),)).fetchone()
             return res[0] == 1
         return False
 
@@ -121,12 +121,25 @@ def create_app(test_config=None):
         request_dict = request.form.to_dict(flat=True)
         del request_dict['token']
         request_dict['createdAt'] = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        request_dict['ownerId'] = uid
+        request_dict['_id'] = eid
+        # each user is allowed 50 files, and no one file can exceed 1G
+        user_files = db.execute(
+                "SELECT COUNT(*) FROM files WHERE id IN (SELECT fid FROM experiment_files WHERE eid IN (SELECT id FROM experiments WHERE uid = ?))", (uid,)).fetchone()[0]
+        remaining = 50 - user_files
+        if remaining < len(request.files):
+            conn.close()
+            return jsonify({'error': 'The %d files you tried to upload exceed the %d remaining files you have left in your quota' % (len(request.files), remaining)})
         for file in request.files.values():
-            print(file.filename)
             if file.filename != '':
                 secure_fn = secure_filename(file.filename)
                 dest = os.path.join(job_folder, secure_fn)
                 file.save(dest)
+                # possible to determine file size before writing to disk?
+                if os.path.getsize(dest) > 1073741824: # 1GB in bytes
+                    os.remove(dest)
+                    conn.close()
+                    return jsonify({'error': 'The file "%s" exceeds the 1GB file size limit' % (file.filename,)})
                 db.execute(insert_file, (dest, 0))
                 fid = db.lastrowid
                 db.execute(insert_map, (eid, fid))
