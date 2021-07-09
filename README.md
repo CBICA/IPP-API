@@ -2,11 +2,7 @@
 
 ## Overview
 
-Simple HTTP server the IPP frontend interface uses to query the database. The (sqlite) database stores user accounts and experiments, and is hardcoded to be created in the project root.
-
-When a user is created, their password is hashed using bcrypt to verify future login attempts, and the current login session is verified by a generating a random login token. Non-public endpoints (i.e. those that require you to be signed in) authenticate users by searching the database for the token sent to the user. As a user only has one token, logging into a new session will log them out of their old session. Login tokens expire after 24h.
-
-When an experiment is received, the POSTed form is serialized into JSON and any uploaded files are saved with a secure filename.
+Simple HTTP server the IPP frontend interface uses to query the (sqlite) database, which stores user accounts and experiments.
 
 | Endpoint | Description | Public |
 | -------- | ------- | ---------- |
@@ -15,12 +11,19 @@ When an experiment is received, the POSTed form is serialized into JSON and any 
 | /experiments       | list user experiments | No
 | /experiments/new   | create new experiment | No
 
+### Workflow
+1. User creates account (/users/new), or logins (/users/auth)
+2. User creates experiment by submitting form (/experiments/new). Uploaded files and the form, serialized as JSON, are placed in a folder like `UPLOAD_FOLDER/uid/submitted/eid` where UPLOAD_FOLDER is an environment variable, uid is a users ID, and eid is an experiment ID. In addition to the "submitted" namespace (meant for the backend to queue) there's an "editing" (ignored by backend) and "completed" namespace. The location of an experiments files determines the status.
+3. IPP backend runs job, places output in `UPLOAD_FOLDER/uid/completed/eid`
+
+When a user is created, their password is hashed using bcrypt, and they are given a login token. Non-public endpoints (i.e. those that require you to be signed in) authenticate users by searching the database for the token sent to the user. As a user only has one token, logging into a new session will log them out of their old session. Login tokens expire after 24h.
+
 ## Installation
 
 ### Docker
 (preferred method)
 ```sh
-docker run -p 3330:5000 --name ipp-api --rm -it -v $PWD:/opt terf/ipp-api
+./run.sh
 ```
 ### Manual (PIP)
 Officially, flask supports python >= 3.6, but seems to work fine with python >= 3.4.
