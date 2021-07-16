@@ -1,4 +1,6 @@
+.DS_Store
+run.sh
 *.sqlite
 __pycache__
 config/
-tmp/
+uploads/

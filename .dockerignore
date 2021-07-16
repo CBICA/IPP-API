@@ -1,2 +1,8 @@
-.git
+.DS_Store
+run.sh
 *.sqlite
+__pycache__
+config/
+uploads/
+.git
+.gitignore

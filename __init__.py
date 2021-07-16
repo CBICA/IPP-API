@@ -10,14 +10,19 @@ from .helpers import *
 
 STATUS_MAP = ["submitted", "completed"]
 schema = """
-CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, email TEXT UNIQUE, password TEXT, token TEXT unique, token_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP);
-CREATE TABLE IF NOT EXISTS experiments (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, uid INTEGER, label TEXT, created TIMESTAMP DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, email TEXT UNIQUE, password TEXT, token TEXT unique, token_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP, approved BOOLEAN DEFAULT 0);
+CREATE TABLE IF NOT EXISTS user_settings (uid INTEGER, name TEXT, value TEXT, UNIQUE(uid, name) ON CONFLICT REPLACE, PRIMARY KEY(uid, name));
+CREATE TABLE IF NOT EXISTS groups (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, name TEXT UNIQUE);
+CREATE TABLE IF NOT EXISTS user_groups (uid INTEGER, gid INTEGER, UNIQUE(uid, gid));
+CREATE TABLE IF NOT EXISTS experiments (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, uid INTEGER, label TEXT, host TEXT, created TIMESTAMP DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS files (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, path TEXT);
 -- eid = experiment ID, fid = file ID
-CREATE TABLE IF NOT EXISTS experiment_files (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, eid INTEGER, fid INTEGER);
+CREATE TABLE IF NOT EXISTS experiment_files (eid INTEGER, fid INTEGER, UNIQUE(eid, fid), PRIMARY KEY(eid, fid), FOREIGN KEY(eid) REFERENCES experiments(id), FOREIGN KEY(fid) REFERENCES files(id));
+CREATE TABLE IF NOT EXISTS limits (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, gid INTEGER, name TEXT, value TEXT, UNIQUE(gid, name) ON CONFLICT REPLACE, FOREIGN KEY(gid) REFERENCES groups(id));
 """
 insert_user = "INSERT INTO users (email, password, token) VALUES (?, ?, ?)"
-insert_experiment = "INSERT INTO experiments (uid, label) VALUES (?, ?)"
+insert_settings = "INSERT INTO user_settings (uid, name, value) VALUES (?, ?, ?)"
+insert_experiment = "INSERT INTO experiments (uid, label, host) VALUES (?, ?, ?)"
 insert_file = "INSERT INTO files (path) VALUES (?)"
 insert_map = "INSERT INTO experiment_files (eid, fid) VALUES (?, ?)"
 
@@ -34,17 +39,66 @@ def create_app(test_config=None):
 
     # Routes
 
+    @app.route("/settings/set", methods=["POST", "OPTIONS"])
+    @cross_origin()
+    def set_settings():
+        conn, db = create_conn()
+        if not is_authd(db, request.form):
+            conn.close()
+            return jsonify({"error": "must be logged in"})
+        uid = db.execute(
+            "SELECT id FROM users WHERE token = ?", (request.form.get("token"),)
+        ).fetchone()[0]
+        db.execute("INSERT OR REPLACE INTO user_settings (uid, name, value) VALUES (?, ?, ?)", (uid, request.form.get("name"), request.form.get("value")))
+        conn.commit()
+        conn.close()
+        return jsonify(True)
+
+    @app.route("/notifications/notify", methods=["POST", "OPTIONS"])
+    @cross_origin()
+    def notify():
+        conn, db = create_conn()
+        email = request.form.get("email")
+        uid = db.execute(
+            "SELECT id FROM users WHERE email = ?", (email,)
+        ).fetchone()[0]
+        rows = db.execute("SELECT value FROM user_settings WHERE uid = ? AND name = 'notification_type'", (uid,)).fetchall()
+        for row in rows:
+            notification_type = row[0]
+            to = email if notification_type == "email" else db.execute("SELECT value FROM user_settings WHERE uid = ? AND name = 'slack_webhook'", (uid,)).fetchone()[0]
+            getattr('send_' + notification_type)(to, request.form.get('message'))
+        conn.close()
+
     @app.route("/users/new", methods=["POST", "OPTIONS"])
     @cross_origin()
     def create_user():
+        if request.form.get("password") != request.form.get("confirm-password"):
+            return jsonify({"error": "passwords don't match"})
         conn, db = create_conn()
         email = request.form.get("email")
         password = get_hashed_password(request.form.get("password"))
         token = get_token()
         db.execute(insert_user, (email, password, token))
+        uid = db.lastrowid
+        for key in request.form:
+            if key.startswith("setting-"):
+                db.execute(insert_settings, (uid, key[8:], request.form.get(key)))
+        db.execute(insert_settings, (uid, "notification_type", "email"))
+        # slack messages need to be configured
+        # db.execute(insert_settings, (uid, "notification_type", "slack_message"))
+        notify_admin(request, uid)
         conn.commit()
         conn.close()
         return jsonify({"token": token})
+
+    @app.route("/users/approve/<id>")
+    @cross_origin()
+    def approve_user(id):
+        conn, db = create_conn()
+        db.execute("UPDATE USERS SET approved = 1 WHERE id = ?", (id,))
+        conn.commit()
+        conn.close()
+        return jsonify(True)
 
     @app.route("/users/auth", methods=["POST", "OPTIONS"])
     @cross_origin()
@@ -136,7 +190,7 @@ def create_app(test_config=None):
         uid = db.execute(
             "SELECT id FROM users WHERE token = ?", (request.form.get("token"),)
         ).fetchone()[0]
-        db.execute(insert_experiment, (uid, request.form.get("label")))
+        db.execute(insert_experiment, (uid, request.form.get("label"), request.form.get('host')))
         eid = db.lastrowid
         user_folder = os.path.join(os.environ["UPLOAD_FOLDER"], str(uid))
         job_folder = os.path.join(user_folder, "submitted", str(eid))

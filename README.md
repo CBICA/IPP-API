@@ -4,12 +4,15 @@
 
 Simple HTTP server the IPP frontend interface uses to query the (sqlite) database, which stores user accounts and experiments.
 
-| Endpoint | Description | Public |
+| Endpoint | Description | Authenticated | Public |
 | -------- | ------- | ---------- |
-| /users/new         | create user | Yes
-| /users/auth        | authenticate user | Yes
-| /experiments       | list user experiments | No
-| /experiments/new   | create new experiment | No
+| /users/new         | create user | No | Yes
+| /users/auth        | authenticate user | No | Yes
+| /experiments       | list user experiments | Yes | Yes
+| /experiments/new   | create new experiment | Yes | Yes
+| /settings/set      | set settings | Yes | Yes
+| /notifications/notify | send email or slack notification | No | No
+| /users/approve/{id} | approve user id | No | No
 
 ### Workflow
 1. User creates account (/users/new), or logins (/users/auth)

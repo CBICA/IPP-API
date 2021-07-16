@@ -1,6 +1,11 @@
+import os
 import sqlite3
 import bcrypt
 import secrets
+import smtplib
+import requests
+import json
+from email.mime.text import MIMEText
 
 
 def create_conn():
@@ -41,3 +46,35 @@ def login(db, args):
         if hashed:
             return check_password(args.get("password"), hashed[0])
     return False
+
+
+def send_email(to, message, subject=""):
+    msg = MIMEText(message)
+    msg["Subject"] = subject
+    msg["From"] = "ipp@cbica.upenn.edu"
+    msg["To"] = to
+    s = smtplib.SMTP("localhost")
+    s.send_message(msg)
+    s.quit()
+
+
+def send_slack_message(to, message, channel=None):
+    payload = {"text": message, "username": "Image Processing Portal"}
+    if channel:
+        payload["channel"] = channel
+    response = requests.post(
+        to,
+        data=json.dumps(payload),
+        headers={"Content-Type": "application/json"},
+    )
+    return response.status_code == 200
+
+def notify_admin(request, uid):
+    user_form = request.form
+    message = "Approve new account?" + \
+    json.dumps(user_form) + \
+        f"\nClick [here]({request.url_root}users/approve/{uid}) to approve"
+    if 'ADMIN_EMAIL' in os.environ:
+        send_email(os.environ['ADMIN_EMAIL'], message)
+    if 'ADMIN_SLACK' in os.environ:
+        send_slack_message(os.environ['ADMIN_SLACK'], message)
