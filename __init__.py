@@ -6,7 +6,7 @@ from datetime import datetime
 from flask import Flask, jsonify, request
 from flask_cors import CORS, cross_origin
 from werkzeug.utils import secure_filename
-from .helpers import *
+import helpers
 
 STATUS_MAP = ["submitted", "completed"]
 schema = """
@@ -36,20 +36,28 @@ def create_app(test_config=None):
     app = Flask(__name__, instance_relative_config=True)
     CORS(app)
     app.config["CORS_HEADERS"] = "no-cors"
+    if __name__ == "__main__":
+        if "FLASK_RUN_PORT" in os.environ:
+            app.run(port=os.environ["FLASK_RUN_PORT"])
+        else:
+            app.run()
 
     # Routes
 
     @app.route("/settings/set", methods=["POST", "OPTIONS"])
     @cross_origin()
     def set_settings():
-        conn, db = create_conn()
-        if not is_authd(db, request.form):
+        conn, db = helpers.create_conn()
+        if not helpers.helpers.login(db, request.form):
             conn.close()
             return jsonify({"error": "must be logged in"})
         uid = db.execute(
             "SELECT id FROM users WHERE token = ?", (request.form.get("token"),)
         ).fetchone()[0]
-        db.execute("INSERT OR REPLACE INTO user_settings (uid, name, value) VALUES (?, ?, ?)", (uid, request.form.get("name"), request.form.get("value")))
+        db.execute(
+            "INSERT OR REPLACE INTO user_settings (uid, name, value) VALUES (?, ?, ?)",
+            (uid, request.form.get("name"), request.form.get("value")),
+        )
         conn.commit()
         conn.close()
         return jsonify(True)
@@ -57,16 +65,26 @@ def create_app(test_config=None):
     @app.route("/notifications/notify", methods=["POST", "OPTIONS"])
     @cross_origin()
     def notify():
-        conn, db = create_conn()
+        conn, db = helpers.create_conn()
         email = request.form.get("email")
-        uid = db.execute(
-            "SELECT id FROM users WHERE email = ?", (email,)
-        ).fetchone()[0]
-        rows = db.execute("SELECT value FROM user_settings WHERE uid = ? AND name = 'notification_type'", (uid,)).fetchall()
+        uid = db.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()[0]
+        rows = db.execute(
+            "SELECT value FROM user_settings WHERE uid = ? AND name = 'notification_type'",
+            (uid,),
+        ).fetchall()
         for row in rows:
             notification_type = row[0]
-            to = email if notification_type == "email" else db.execute("SELECT value FROM user_settings WHERE uid = ? AND name = 'slack_webhook'", (uid,)).fetchone()[0]
-            getattr('send_' + notification_type)(to, request.form.get('message'))
+            to = (
+                email
+                if notification_type == "email"
+                else db.execute(
+                    "SELECT value FROM user_settings WHERE uid = ? AND name = 'slack_webhook'",
+                    (uid,),
+                ).fetchone()[0]
+            )
+            helpers.getattr("send_" + notification_type)(
+                to, request.form.get("message")
+            )
         conn.close()
 
     @app.route("/users/new", methods=["POST", "OPTIONS"])
@@ -74,10 +92,10 @@ def create_app(test_config=None):
     def create_user():
         if request.form.get("password") != request.form.get("confirm-password"):
             return jsonify({"error": "passwords don't match"})
-        conn, db = create_conn()
+        conn, db = helpers.create_conn()
         email = request.form.get("email")
-        password = get_hashed_password(request.form.get("password"))
-        token = get_token()
+        password = helpers.get_hashed_password(request.form.get("password"))
+        token = helpers.get_token()
         db.execute(insert_user, (email, password, token))
         uid = db.lastrowid
         for key in request.form:
@@ -86,15 +104,16 @@ def create_app(test_config=None):
         db.execute(insert_settings, (uid, "notification_type", "email"))
         # slack messages need to be configured
         # db.execute(insert_settings, (uid, "notification_type", "slack_message"))
-        notify_admin(request, uid)
+        helpers.notify_admin(request, uid)
         conn.commit()
         conn.close()
-        return jsonify({"token": token})
+        # return jsonify({"token": token})
+        return jsonify(True)
 
     @app.route("/users/approve/<id>")
     @cross_origin()
     def approve_user(id):
-        conn, db = create_conn()
+        conn, db = helpers.create_conn()
         db.execute("UPDATE USERS SET approved = 1 WHERE id = ?", (id,))
         conn.commit()
         conn.close()
@@ -103,9 +122,9 @@ def create_app(test_config=None):
     @app.route("/users/auth", methods=["POST", "OPTIONS"])
     @cross_origin()
     def auth_user():
-        conn, db = create_conn()
+        conn, db = helpers.create_conn()
         if login(db, request.form):
-            token = get_token()
+            token = helpers.get_token()
             db.execute(
                 "UPDATE users SET token = ? WHERE email = ?",
                 (
@@ -122,8 +141,8 @@ def create_app(test_config=None):
     @app.route("/experiments", methods=["GET"])
     @cross_origin()
     def experiments():
-        conn, db = create_conn()
-        if not is_authd(db, request.args):
+        conn, db = helpers.create_conn()
+        if not helpers.helpers.login(db, request.args):
             conn.close()
             return jsonify({"error": "must be logged in"})
         uid = db.execute(
@@ -183,14 +202,17 @@ def create_app(test_config=None):
     @app.route("/experiments/new", methods=["POST", "OPTIONS"])
     @cross_origin()
     def new_experiment():
-        conn, db = create_conn()
-        if not is_authd(db, request.form):
+        conn, db = helpers.create_conn()
+        if not helpers.helpers.login(db, request.form):
             conn.close()
             return jsonify({"error": "must be logged in"})
         uid = db.execute(
             "SELECT id FROM users WHERE token = ?", (request.form.get("token"),)
         ).fetchone()[0]
-        db.execute(insert_experiment, (uid, request.form.get("label"), request.form.get('host')))
+        db.execute(
+            insert_experiment,
+            (uid, request.form.get("label"), request.form.get("host")),
+        )
         eid = db.lastrowid
         user_folder = os.path.join(os.environ["UPLOAD_FOLDER"], str(uid))
         job_folder = os.path.join(user_folder, "submitted", str(eid))
@@ -218,14 +240,17 @@ def create_app(test_config=None):
                     % (len(request.files), remaining)
                 }
             )
-        for file in request.files.values():
+        # for file in request.files.values():
+        for input_name, file in request.files.items():
             if file.filename != "":
                 secure_fn = secure_filename(file.filename)
                 dest = os.path.join(job_folder, secure_fn)
                 file.save(dest)
                 # possible to determine file size before writing to disk?
                 if os.path.getsize(dest) > 1073741824:  # 1GB in bytes
-                    os.remove(dest)
+                    os.remove(job_folder)
+                    os.remove(completed_job_folder)
+                    os.remove(edited_job_folder)
                     conn.close()
                     return jsonify(
                         {
@@ -236,6 +261,7 @@ def create_app(test_config=None):
                 db.execute(insert_file, (dest,))
                 fid = db.lastrowid
                 db.execute(insert_map, (eid, fid))
+                request_dict[input_name] = dest
         conn.commit()
         conn.close()
         with open(os.path.join(job_folder, "params.json"), "w") as f:
