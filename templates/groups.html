@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
+  <title>IPP Admin Panel</title>
+</head>
+
+<body>
+  <div class="container">
+    <div class="row">
+      <div class="col-md-4 offset-md-4">
+        <table class="table">
+          <thead>
+            <tr>
+              <th scope="col">#</th>
+              <th scope="col">Group</th>
+              <th scope="col">Remove</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for group in groups %}
+            <tr>
+              <th scope="row">{{group.id}}</th>
+              <td>
+                <form action="/groups/edit/{{group.id}}" method="post">
+                  <div class="input-group mb-3">
+                    <input type="text" name="group" id="edit-group-{{group.id}}" value="{{group.name}}" class="form-control">
+                    <button type="submit" class="btn btn-outline-primary btn-sm">Edit</button>
+                  </div>
+                </form>
+              </td>
+              <td>
+                <form action="/groups/remove/{{group.id}}" method="post">
+                  <input type="submit" value="Remove" class="btn btn-danger btn-sm">
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <form action="/groups/create" method="post">
+          <div class="form-group">
+            <label for="group">Group label</label>
+            <input type="text" name="group" id="group" class="form-control">
+          </div>
+          <div class="form-group mt-2">
+            <button type="submit" class="btn btn-primary">Submit</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</body>
+
+</html>
