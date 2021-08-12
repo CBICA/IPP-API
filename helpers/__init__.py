@@ -108,5 +108,6 @@ def extract_params(params):
         elif param[0] == "experimentName":
             experimentName = param[1]
         else:
-            new_params[param[0]] = param[1]
+            # the backend server places downloaded files in "inputs"
+            new_params[param[0]] = param[1] if not param[1].startswith(os.environ['UPLOAD_FOLDER']) else "./inputs" + param[1]
     return app, experimentDescription, experimentName, new_params

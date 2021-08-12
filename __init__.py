@@ -125,6 +125,15 @@ def create_app(test_config=None):
         conn.close()
         return jsonify(True)
 
+    @app.route("/users/deny/<id>")
+    @cross_origin()
+    def deny_user(id):
+        conn, db = helpers.create_conn()
+        db.execute("UPDATE USERS SET approved = 0 WHERE id = ?", (id,))
+        conn.commit()
+        conn.close()
+        return jsonify(True)
+
     @app.route("/users/auth", methods=["POST", "OPTIONS"])
     @cross_origin()
     def auth_user():
@@ -245,6 +254,24 @@ def create_app(test_config=None):
         #     return response
         return send_file(memory_file, attachment_filename='files.zip', as_attachment=True)
 
+    @app.route("/experiments/<id>/results", methods = ['POST', 'OPTIONS'])
+    @cross_origin()
+    def upload_results(id):
+        conn, db = helpers.create_conn()
+        uid = db.execute(
+            "SELECT uid FROM experiments WHERE id = ?", (id,)
+        ).fetchone()[0]
+        conn.close()
+        user_folder = os.path.join(os.environ["UPLOAD_FOLDER"], str(uid))
+        completed_job_folder = os.path.join(user_folder, "completed", str(id))
+        for file in request.files.values():
+            secure_fn = secure_filename(file.filename)
+            dest = os.path.join(completed_job_folder, secure_fn)
+            file.save(dest)
+        return jsonify(True)
+
+
+
     @app.route("/experiments/new", methods=["POST", "OPTIONS"])
     @cross_origin()
     def new_experiment():
@@ -269,6 +296,7 @@ def create_app(test_config=None):
         os.makedirs(edited_job_folder, exist_ok=True)
         request_dict = request.form.to_dict(flat=True)
         del request_dict["token"]
+        del request_dict["host"]
         # request_dict["createdAt"] = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         # request_dict["ownerId"] = uid
         # request_dict["_id"] = eid
