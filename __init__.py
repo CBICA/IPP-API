@@ -6,13 +6,15 @@ import zipfile
 import tempfile
 import shutil
 from datetime import datetime
-from flask import Flask, jsonify, request, send_file, after_this_request, redirect
+from flask import Flask, jsonify, request, send_file, after_this_request, redirect, send_from_directory
 from flask_cors import CORS, cross_origin
 from werkzeug.utils import secure_filename
 from flask import render_template # only for admin pages
 import helpers
 
-STATUS_MAP = ["submitted", "completed"]
+STATUS_SUBMITTED = 0
+STATUS_QUEUED = 1
+STATUS_COMPLETED = 2
 schema = """
 CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, email TEXT UNIQUE, password TEXT, token TEXT unique, token_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP, approved BOOLEAN DEFAULT 0);
 CREATE TABLE IF NOT EXISTS user_settings (uid INTEGER, name TEXT, value TEXT, UNIQUE(uid, name) ON CONFLICT REPLACE, PRIMARY KEY(uid, name));
@@ -181,19 +183,20 @@ def create_app(test_config=None):
             eid = r[0]
             user_folder = os.path.join(os.environ["UPLOAD_FOLDER"], str(uid))
             params = db.execute("SELECT name, value FROM experiment_settings WHERE eid = ?", (eid,)).fetchall()
-            app, experimentDescription, experimentName, params = helpers.extract_params(params)
+            app, experimentDescription, experimentName, params = helpers.extract_params(params, False)
             res.append(
                 {
                     "id": r[0],
                     "label": r[1],
                     "created": r[2],
                     # "status_code": status_code,
-                    "status": r[3],
+                    "status": ["submitted", "queued", "completed"][r[3]],
                     "app": app,
                     "experimentDescription": experimentDescription,
                     "experimentName": experimentName,
-                    "inputs": list(map(lambda x: os.path.basename(x[0]), input_files)),
-                    "outputs": list(map(lambda x: os.path.basename(x[0]), output_files)),
+                    "inputs": [item for sublist in input_files for item in sublist],
+                    # list(map(lambda x: os.path.basename(x[0]), input_files))
+                    "outputs": output_files,
                     "params": params,
                 }
             )
@@ -206,7 +209,7 @@ def create_app(test_config=None):
         conn, db = helpers.create_conn()
         experiments = []
         rows = db.execute(
-            "SELECT id, uid, host FROM experiments WHERE status = 0 ORDER BY created DESC"
+            "SELECT id, uid, host FROM experiments WHERE status = ? ORDER BY created DESC", (STATUS_SUBMITTED,)
         ).fetchall()
         for r in rows:
             eid = r[0]
@@ -214,7 +217,7 @@ def create_app(test_config=None):
             # or does this happen when backend actually starts job?
             # db.execute("UPDATE experiments SET queued = 1 WHERE id = ?", (eid,))
             params = db.execute("SELECT name, value FROM experiment_settings WHERE eid = ?", (eid,)).fetchall()
-            app, experimentDescription, experimentName, params = helpers.extract_params(params)
+            app, experimentDescription, experimentName, params = helpers.extract_params(params, True)
             experiments.append(
                 {
                     "id": r[0],
@@ -230,6 +233,7 @@ def create_app(test_config=None):
                     "experimentName": experimentName
                 }
             )
+        db.execute("UPDATE experiments SET status = ? WHERE status = ?", (STATUS_QUEUED, STATUS_SUBMITTED,))
         conn.commit()
         conn.close()
         return jsonify(experiments)
@@ -261,6 +265,7 @@ def create_app(test_config=None):
         uid = db.execute(
             "SELECT uid FROM experiments WHERE id = ?", (id,)
         ).fetchone()[0]
+        db.execute("UPDATE experiments SET status = ? WHERE id = ?", (STATUS_COMPLETED, id))
         conn.close()
         user_folder = os.path.join(os.environ["UPLOAD_FOLDER"], str(uid))
         completed_job_folder = os.path.join(user_folder, "completed", str(id))
@@ -269,6 +274,19 @@ def create_app(test_config=None):
             dest = os.path.join(completed_job_folder, secure_fn)
             file.save(dest)
         return jsonify(True)
+
+    @app.route("/experiments/<id>/file", methods = ['GET', 'OPTIONS'])
+    def static_file(id):
+        conn, db = helpers.create_conn()
+        if not helpers.is_authd(db, request.args):
+            conn.close()
+            return jsonify({"error": "must be logged in"})
+        uid = db.execute(
+            "SELECT id FROM users WHERE token = ?", (request.args.get("token"),)
+        ).fetchone()[0]
+        conn.close()
+        path = request.args.get('path')
+        return send_from_directory(os.path.join(os.environ['UPLOAD_FOLDER'], str(uid), "completed", id), path)
 
 
 

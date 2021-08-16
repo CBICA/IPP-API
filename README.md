@@ -17,6 +17,7 @@ Simple HTTP server the IPP frontend interface uses to query the (sqlite) databas
 | /experiments/queue           | list queued experiments | No | No |
 | /experiments/{id}/files      | download experiment files | No | No |
 | /experiments/{id}/results    | upload experiment result files | No | No |
+| /experiments/{id}/file       | download specific experiment file | Yes | Yes |
 | /experiments/new             | create new experiment | Yes | Yes |
 | /uses/groups                 | list groups a user is in | Yes | Yes |
 | /admin/users                 | users admin panel | No | No |
