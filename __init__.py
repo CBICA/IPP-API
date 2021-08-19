@@ -44,10 +44,14 @@ def create_app(test_config=None):
     CORS(app)
     app.config["CORS_HEADERS"] = "no-cors"
     if __name__ == "__main__":
+        port = 8080
+        host = "0.0.0.0"
         if "FLASK_RUN_PORT" in os.environ:
-            app.run(port=os.environ["FLASK_RUN_PORT"])
-        else:
-            app.run()
+            port = int(os.environ["FLASK_RUN_PORT"])
+        if "FLASK_RUN_HOST" in os.environ:
+            host = os.environ["FLASK_RUN_HOST"]
+        print("Running on %s:%d" % (host, port))
+        app.run(host=host, port=port)
 
     # Routes
 
