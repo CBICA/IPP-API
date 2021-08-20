@@ -43,15 +43,6 @@ def create_app(test_config=None):
     app = Flask(__name__, instance_relative_config=True)
     CORS(app)
     app.config["CORS_HEADERS"] = "no-cors"
-    if __name__ == "__main__":
-        port = 8080
-        host = "0.0.0.0"
-        if "FLASK_RUN_PORT" in os.environ:
-            port = int(os.environ["FLASK_RUN_PORT"])
-        if "FLASK_RUN_HOST" in os.environ:
-            host = os.environ["FLASK_RUN_HOST"]
-        print("Running on %s:%d" % (host, port))
-        app.run(host=host, port=port)
 
     # Routes
 
@@ -434,6 +425,15 @@ def create_app(test_config=None):
         conn.commit()
         conn.close()
         return redirect("/admin/users")
+
+    if __name__ == "__main__":
+        port = 8080
+        host = "0.0.0.0"
+        if "FLASK_RUN_PORT" in os.environ:
+            port = int(os.environ["FLASK_RUN_PORT"])
+        if "FLASK_RUN_HOST" in os.environ:
+            host = os.environ["FLASK_RUN_HOST"]
+        app.run(host=host, port=port)
 
     return app
 
