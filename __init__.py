@@ -14,6 +14,7 @@ from flask import (
     after_this_request,
     redirect,
     send_from_directory,
+    abort,
 )
 from flask_cors import CORS, cross_origin
 from werkzeug.utils import secure_filename
@@ -55,8 +56,9 @@ def create_app(test_config=None):
     # Routes
 
     @app.route("/notifications/notify", methods=["POST", "OPTIONS"])
-    @cross_origin()
     def notify():
+        if request.remote_addr != "127.0.0.1":
+            abort(403)
         conn, db = helpers.create_conn()
         email = request.form.get("email")
         uid = db.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()[0]
@@ -121,8 +123,9 @@ def create_app(test_config=None):
         return jsonify(True)
 
     @app.route("/users/approve/<id>")
-    @cross_origin()
     def approve_user(id):
+        if request.remote_addr != "127.0.0.1":
+            abort(403)
         conn, db = helpers.create_conn()
         db.execute("UPDATE USERS SET approved = 1 WHERE id = ?", (id,))
         conn.commit()
@@ -130,8 +133,9 @@ def create_app(test_config=None):
         return jsonify(True)
 
     @app.route("/users/deny/<id>")
-    @cross_origin()
     def deny_user(id):
+        if request.remote_addr != "127.0.0.1":
+            abort(403)
         conn, db = helpers.create_conn()
         db.execute("UPDATE USERS SET approved = 0 WHERE id = ?", (id,))
         conn.commit()
@@ -210,8 +214,9 @@ def create_app(test_config=None):
         return jsonify({"experiments": res})
 
     @app.route("/experiments/queue", methods=["GET", "OPTIONS"])
-    @cross_origin()
     def experiment_queue():
+        if request.remote_addr != "127.0.0.1":
+            abort(403)
         conn, db = helpers.create_conn()
         experiments = []
         rows = db.execute(
@@ -256,10 +261,11 @@ def create_app(test_config=None):
         return jsonify(experiments)
 
     @app.route("/experiments/<id>/files", methods=["GET", "OPTIONS"])
-    @cross_origin()
     # https://stackoverflow.com/a/24613980
     # https://stackoverflow.com/a/27337047
     def download_files(id):
+        if request.remote_addr != "127.0.0.1":
+            abort(403)
         conn, db = helpers.create_conn()
         uid = db.execute("SELECT uid FROM experiments WHERE id = ?", (id,)).fetchone()[
             0
@@ -280,8 +286,9 @@ def create_app(test_config=None):
         )
 
     @app.route("/experiments/<id>/results", methods=["POST", "OPTIONS"])
-    @cross_origin()
     def upload_results(id):
+        if request.remote_addr != "127.0.0.1":
+            abort(403)
         conn, db = helpers.create_conn()
         uid = db.execute("SELECT uid FROM experiments WHERE id = ?", (id,)).fetchone()[
             0
@@ -299,6 +306,7 @@ def create_app(test_config=None):
         return jsonify(True)
 
     @app.route("/experiments/<id>/file", methods=["GET", "OPTIONS"])
+    @cross_origin()
     def static_file(id):
         conn, db = helpers.create_conn()
         if not helpers.is_authd(db, request.args):
@@ -401,6 +409,8 @@ def create_app(test_config=None):
 
     @app.route("/admin/users", methods=["GET", "OPTIONS"])
     def user_admin_panel():
+        if request.remote_addr != "127.0.0.1":
+            abort(403)
         conn, db = helpers.create_conn()
         rows = db.execute(
             "SELECT id, email, token, approved FROM users ORDER BY id DESC"
@@ -429,6 +439,8 @@ def create_app(test_config=None):
 
     @app.route("/admin/groups", methods=["GET", "OPTIONS"])
     def group_admin_panel():
+        if request.remote_addr != "127.0.0.1":
+            abort(403)
         conn, db = helpers.create_conn()
         rows = db.execute("SELECT id, name FROM groups ORDER BY id DESC").fetchall()
         groups = []
@@ -439,6 +451,8 @@ def create_app(test_config=None):
 
     @app.route("/groups/create", methods=["POST", "OPTIONS"])
     def create_group():
+        if request.remote_addr != "127.0.0.1":
+            abort(403)
         conn, db = helpers.create_conn()
         db.execute("INSERT INTO groups (name) VALUES (?)", (request.form.get("group"),))
         conn.commit()
@@ -447,6 +461,8 @@ def create_app(test_config=None):
 
     @app.route("/groups/remove/<id>", methods=["POST", "OPTIONS"])
     def remove_group(id):
+        if request.remote_addr != "127.0.0.1":
+            abort(403)
         conn, db = helpers.create_conn()
         db.execute("DELETE FROM groups WHERE id = ?", (id,))
         db.execute("DELETE FROM user_groups WHERE gid = ?", (id,))
@@ -456,6 +472,8 @@ def create_app(test_config=None):
 
     @app.route("/groups/edit/<id>", methods=["POST", "OPTIONS"])
     def edit_group(id):
+        if request.remote_addr != "127.0.0.1":
+            abort(403)
         conn, db = helpers.create_conn()
         db.execute(
             "UPDATE groups SET name = ? WHERE id = ?",
@@ -470,6 +488,8 @@ def create_app(test_config=None):
 
     @app.route("/users/groups/map", methods=["POST", "OPTIONS"])
     def map_user_to_group():
+        if request.remote_addr != "127.0.0.1":
+            abort(403)
         conn, db = helpers.create_conn()
         uid = request.form.get("uid")
         for gid in request.form.getlist("gid"):
