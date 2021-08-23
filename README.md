@@ -2,10 +2,10 @@
 
 ## Overview
 
-Simple HTTP server the IPP frontend interface uses to query the (sqlite) database, which stores user accounts and experiments.
+The API server contains all the business logic of the IPP, connecting the frontend interface to the [backend job-submission scripts](https://github.com/CBICA/IPP-be) and sqlite database (which stores user accounts and experiments). One set of routes (those marked public) are meant for the frontend, and the other set (marked not public) are meant for the backend. Backend routes only respond to localhost, and most frontend routes require you to pass a login token, however, some frontend routes don't require authentication (like /users/new).
 
 
-| Endpoint | Description | Authenticated | Public |
+| Endpoint | Description | Authenticated <small>(require login token)</small> | Public <small>(respond to any IP)</small> |
 | -------- | ----------- | ------------- | ------ |
 | /notifications/notify        | send email or slack notification | No | No |
 | /users/new                   | create user | No | Yes |
@@ -26,14 +26,6 @@ Simple HTTP server the IPP frontend interface uses to query the (sqlite) databas
 | /groups/remove/{id}          | delete group | No | No |
 | /groups/edit/{id}            | edit group | No | No |
 | /users/groups/map            | map user to a group | No | No |
-
-
-Authenticated means the user has to be signed in. Non-public means the endpoint is only available to UPHS IPs (meant for backend).
-
-### Workflow
-1. User creates account (/users/new), or logins (/users/auth)
-2. User creates experiment by submitting form (/experiments/new). Uploaded files and the form, serialized as JSON, are placed in a folder like `UPLOAD_FOLDER/uid/submitted/eid` where UPLOAD_FOLDER is an environment variable, uid is a users ID, and eid is an experiment ID. In addition to the "submitted" namespace (meant for the backend to queue) there's an "editing" (ignored by backend) and "completed" namespace. The location of an experiments files determines the status.
-3. IPP backend runs job, places output in `UPLOAD_FOLDER/uid/completed/eid`
 
 ## Installation
 
@@ -56,6 +48,14 @@ forever start -c flask run --host=0.0.0.0 --port 5000
 ```
 `forever` is a more robust alternative to `nohup` + backgrounding process.
 Either terminate SSL at load balancer or provide `--cert` / `--key` for HTTPS.
+
+### CentOS 6
+To support CentOS 6 `./centos6/build.sh` converts python 3 to 2 then builds a standalone binary using pyinstaller
+```sh
+cd centos6/dist
+# assumes you ran ../build.sh
+FLASK_ENV=production UPLOAD_FOLDER=/var/uploads FLASK_RUN_PORT=8080 ./__init__
+```
 
 ## Todo
 - rate limiting endpoints (in application or with fail2ban?)
