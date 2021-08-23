@@ -6,10 +6,18 @@ import zipfile
 import tempfile
 import shutil
 from datetime import datetime
-from flask import Flask, jsonify, request, send_file, after_this_request, redirect, send_from_directory
+from flask import (
+    Flask,
+    jsonify,
+    request,
+    send_file,
+    after_this_request,
+    redirect,
+    send_from_directory,
+)
 from flask_cors import CORS, cross_origin
 from werkzeug.utils import secure_filename
-from flask import render_template # only for admin pages
+from flask import render_template  # only for admin pages
 import helpers
 
 STATUS_SUBMITTED = 0
@@ -112,7 +120,6 @@ def create_app(test_config=None):
         conn.close()
         return jsonify(True)
 
-
     @app.route("/users/approve/<id>")
     @cross_origin()
     def approve_user(id):
@@ -177,8 +184,12 @@ def create_app(test_config=None):
             # status_code = 0 if len(output_files) == 0 else 1
             eid = r[0]
             user_folder = os.path.join(os.environ["UPLOAD_FOLDER"], str(uid))
-            params = db.execute("SELECT name, value FROM experiment_settings WHERE eid = ?", (eid,)).fetchall()
-            app, experimentDescription, experimentName, params = helpers.extract_params(params, False)
+            params = db.execute(
+                "SELECT name, value FROM experiment_settings WHERE eid = ?", (eid,)
+            ).fetchall()
+            app, experimentDescription, experimentName, params = helpers.extract_params(
+                params, False
+            )
             res.append(
                 {
                     "id": r[0],
@@ -204,15 +215,20 @@ def create_app(test_config=None):
         conn, db = helpers.create_conn()
         experiments = []
         rows = db.execute(
-            "SELECT id, uid, host FROM experiments WHERE status = ? ORDER BY created DESC", (STATUS_SUBMITTED,)
+            "SELECT id, uid, host FROM experiments WHERE status = ? ORDER BY created DESC",
+            (STATUS_SUBMITTED,),
         ).fetchall()
         for r in rows:
             eid = r[0]
             uid = r[1]
             # or does this happen when backend actually starts job?
             # db.execute("UPDATE experiments SET queued = 1 WHERE id = ?", (eid,))
-            params = db.execute("SELECT name, value FROM experiment_settings WHERE eid = ?", (eid,)).fetchall()
-            app, experimentDescription, experimentName, params = helpers.extract_params(params, True)
+            params = db.execute(
+                "SELECT name, value FROM experiment_settings WHERE eid = ?", (eid,)
+            ).fetchall()
+            app, experimentDescription, experimentName, params = helpers.extract_params(
+                params, True
+            )
             experiments.append(
                 {
                     "id": r[0],
@@ -225,24 +241,32 @@ def create_app(test_config=None):
                     "params": params,
                     "app": app,
                     "experimentDescription": experimentDescription,
-                    "experimentName": experimentName
+                    "experimentName": experimentName,
                 }
             )
-        db.execute("UPDATE experiments SET status = ? WHERE status = ?", (STATUS_QUEUED, STATUS_SUBMITTED,))
+        db.execute(
+            "UPDATE experiments SET status = ? WHERE status = ?",
+            (
+                STATUS_QUEUED,
+                STATUS_SUBMITTED,
+            ),
+        )
         conn.commit()
         conn.close()
         return jsonify(experiments)
 
-    @app.route('/experiments/<id>/files', methods = ['GET', 'OPTIONS'])
+    @app.route("/experiments/<id>/files", methods=["GET", "OPTIONS"])
     @cross_origin()
     # https://stackoverflow.com/a/24613980
     # https://stackoverflow.com/a/27337047
     def download_files(id):
         conn, db = helpers.create_conn()
-        uid = db.execute(
-            "SELECT uid FROM experiments WHERE id = ?", (id,)
-        ).fetchone()[0]
-        files = os.path.join(os.environ['UPLOAD_FOLDER'], str(uid), "submitted", str(id))
+        uid = db.execute("SELECT uid FROM experiments WHERE id = ?", (id,)).fetchone()[
+            0
+        ]
+        files = os.path.join(
+            os.environ["UPLOAD_FOLDER"], str(uid), "submitted", str(id)
+        )
         memory_file = helpers.zipdir(files)
         # @after_this_request
         # def remove_file(response):
@@ -251,16 +275,20 @@ def create_app(test_config=None):
         #     except Exception as error:
         #         app.logger.error("Error removing or closing downloaded file handle", error)
         #     return response
-        return send_file(memory_file, attachment_filename='files.zip', as_attachment=True)
+        return send_file(
+            memory_file, attachment_filename="files.zip", as_attachment=True
+        )
 
-    @app.route("/experiments/<id>/results", methods = ['POST', 'OPTIONS'])
+    @app.route("/experiments/<id>/results", methods=["POST", "OPTIONS"])
     @cross_origin()
     def upload_results(id):
         conn, db = helpers.create_conn()
-        uid = db.execute(
-            "SELECT uid FROM experiments WHERE id = ?", (id,)
-        ).fetchone()[0]
-        db.execute("UPDATE experiments SET status = ? WHERE id = ?", (STATUS_COMPLETED, id))
+        uid = db.execute("SELECT uid FROM experiments WHERE id = ?", (id,)).fetchone()[
+            0
+        ]
+        db.execute(
+            "UPDATE experiments SET status = ? WHERE id = ?", (STATUS_COMPLETED, id)
+        )
         conn.close()
         user_folder = os.path.join(os.environ["UPLOAD_FOLDER"], str(uid))
         completed_job_folder = os.path.join(user_folder, "completed", str(id))
@@ -270,7 +298,7 @@ def create_app(test_config=None):
             file.save(dest)
         return jsonify(True)
 
-    @app.route("/experiments/<id>/file", methods = ['GET', 'OPTIONS'])
+    @app.route("/experiments/<id>/file", methods=["GET", "OPTIONS"])
     def static_file(id):
         conn, db = helpers.create_conn()
         if not helpers.is_authd(db, request.args):
@@ -280,10 +308,10 @@ def create_app(test_config=None):
             "SELECT id FROM users WHERE token = ?", (request.args.get("token"),)
         ).fetchone()[0]
         conn.close()
-        path = request.args.get('path')
-        return send_from_directory(os.path.join(os.environ['UPLOAD_FOLDER'], str(uid), "completed", id), path)
-
-
+        path = request.args.get("path")
+        return send_from_directory(
+            os.path.join(os.environ["UPLOAD_FOLDER"], str(uid), "completed", id), path
+        )
 
     @app.route("/experiments/new", methods=["POST", "OPTIONS"])
     @cross_origin()
@@ -350,7 +378,10 @@ def create_app(test_config=None):
                 db.execute(insert_map, (eid, fid))
                 request_dict[input_name] = dest
         for k, v in request_dict.items():
-            db.execute("INSERT INTO experiment_settings (name, value, eid) VALUES (?, ?, ?)", (k, v, eid))
+            db.execute(
+                "INSERT INTO experiment_settings (name, value, eid) VALUES (?, ?, ?)",
+                (k, v, eid),
+            )
         conn.commit()
         conn.close()
         return jsonify(True)
@@ -361,18 +392,33 @@ def create_app(test_config=None):
         conn, db = helpers.create_conn()
         token = request.args.get("token")
         uid = db.execute("SELECT id FROM users WHERE token = ?", (token,)).fetchone()[0]
-        groups = db.execute("SELECT name FROM groups WHERE id IN (SELECT gid FROM user_groups WHERE uid = ?)", (uid,)).fetchall()
+        groups = db.execute(
+            "SELECT name FROM groups WHERE id IN (SELECT gid FROM user_groups WHERE uid = ?)",
+            (uid,),
+        ).fetchall()
         conn.close()
         return jsonify({"groups": [g[0] for g in groups]})
 
     @app.route("/admin/users", methods=["GET", "OPTIONS"])
     def user_admin_panel():
         conn, db = helpers.create_conn()
-        rows = db.execute("SELECT id, email, token, approved FROM users ORDER BY id DESC").fetchall()
+        rows = db.execute(
+            "SELECT id, email, token, approved FROM users ORDER BY id DESC"
+        ).fetchall()
         users = []
         for r in rows:
-            user_groups = db.execute("SELECT gid FROM user_groups WHERE uid = ?", (r[0],)).fetchall()
-            users.append({"id": r[0], "email": r[1], "token": r[2], "approved": r[3], "groups": [g[0] for g in user_groups]})
+            user_groups = db.execute(
+                "SELECT gid FROM user_groups WHERE uid = ?", (r[0],)
+            ).fetchall()
+            users.append(
+                {
+                    "id": r[0],
+                    "email": r[1],
+                    "token": r[2],
+                    "approved": r[3],
+                    "groups": [g[0] for g in user_groups],
+                }
+            )
 
         rows = db.execute("SELECT id, name FROM groups ORDER BY id DESC").fetchall()
         groups = []
@@ -411,7 +457,13 @@ def create_app(test_config=None):
     @app.route("/groups/edit/<id>", methods=["POST", "OPTIONS"])
     def edit_group(id):
         conn, db = helpers.create_conn()
-        db.execute("UPDATE groups SET name = ? WHERE id = ?", (request.form.get('group'), id,))
+        db.execute(
+            "UPDATE groups SET name = ? WHERE id = ?",
+            (
+                request.form.get("group"),
+                id,
+            ),
+        )
         conn.commit()
         conn.close()
         return redirect("/admin/groups")

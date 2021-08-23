@@ -97,7 +97,8 @@ def notify_admin(request, uid):
     if "ADMIN_SLACK" in os.environ:
         send_slack_message(os.environ["ADMIN_SLACK"], message)
 
-def extract_params(params, backend = False):
+
+def extract_params(params, backend=False):
     new_params = {}
     app = experimentDescription = experimentName = ""
     for param in params:
@@ -109,5 +110,9 @@ def extract_params(params, backend = False):
             experimentName = param[1]
         else:
             # the backend server places downloaded files in "inputs"
-            new_params[param[0]] = param[1] if not backend or not param[1].startswith(os.environ['UPLOAD_FOLDER']) else "./inputs" + param[1]
+            new_params[param[0]] = (
+                param[1]
+                if not backend or not param[1].startswith(os.environ["UPLOAD_FOLDER"])
+                else "./inputs" + param[1]
+            )
     return app, experimentDescription, experimentName, new_params
