@@ -5,13 +5,13 @@ import json
 import zipfile
 import tempfile
 import shutil
+import glob
 from datetime import datetime
 from flask import (
     Flask,
     jsonify,
     request,
     send_file,
-    after_this_request,
     redirect,
     send_from_directory,
     abort,
@@ -24,6 +24,7 @@ import helpers
 STATUS_SUBMITTED = 0
 STATUS_QUEUED = 1
 STATUS_COMPLETED = 2
+STATUS_FAILED = 3
 schema = """
 CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, email TEXT UNIQUE, password TEXT, token TEXT unique, token_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP, approved BOOLEAN DEFAULT 0);
 CREATE TABLE IF NOT EXISTS user_settings (uid INTEGER, name TEXT, value TEXT, UNIQUE(uid, name) ON CONFLICT REPLACE, PRIMARY KEY(uid, name));
@@ -321,6 +322,13 @@ def create_app(test_config=None):
             os.path.join(os.environ["UPLOAD_FOLDER"], str(uid), "completed", id), path
         )
 
+    # Uploaded files and the form, serialized as JSON, are placed in
+    # a folder like `UPLOAD_FOLDER/uid/submitted/eid` where UPLOAD_FOLDER
+    # is an environment variable, uid is a users ID, and eid is an experiment
+    # ID. In addition to the "submitted" namespace (meant for the backend to queue)
+    # there's an "editing" (ignored by backend) and "completed" namespace.
+    # The location of an experiments files determines the status.
+    # When the IPP backend runs job, output should be placed in `UPLOAD_FOLDER/uid/completed/eid`
     @app.route("/experiments/new", methods=["POST", "OPTIONS"])
     @cross_origin()
     def new_experiment():
@@ -371,9 +379,9 @@ def create_app(test_config=None):
                 file.save(dest)
                 # possible to determine file size before writing to disk?
                 if os.path.getsize(dest) > 1073741824:  # 1GB in bytes
-                    os.remove(job_folder)
-                    os.remove(completed_job_folder)
-                    os.remove(edited_job_folder)
+                    shutil.rmtree(job_folder)
+                    shutil.rmtree(completed_job_folder)
+                    shutil.rmtree(edited_job_folder)
                     conn.close()
                     return jsonify(
                         {
@@ -393,6 +401,77 @@ def create_app(test_config=None):
         conn.commit()
         conn.close()
         return jsonify(True)
+
+    @app.route("/experiments/<id>/delete", methods=["DELETE", "OPTIONS"])
+    def delete_experiment_inputs(id):
+        if request.remote_addr != "127.0.0.1":
+            return abort(403)
+        if request.method == "OPTIONS":
+            return jsonify({"error": "the only request method is DELETE"})
+        conn, db = helpers.create_conn()
+        uid = db.execute("SELECT uid FROM experiments WHERE id = ?", (id,)).fetchone()[
+            0
+        ]
+        shutil.rmtree(os.path.join(os.environ["UPLOAD_FOLDER"], str(uid), "submitted", id))
+        conn.close()
+        return jsonify(True)
+
+    @app.route("/experiments/<id>/failed", methods=["POST", "OPTIONS"])
+    def mark_failed(id):
+        if request.remote_addr != "127.0.0.1":
+            return abort(403)
+        if request.method == "OPTIONS":
+            return jsonify({"error": "the only request method is POST"})
+        conn, db = helpers.create_conn()
+        db.execute(
+            "UPDATE experiments SET status = ? WHERE id = ?", (STATUS_FAILED, id)
+        )
+        conn.commit()
+        conn.close()
+        return jsonify(True)
+
+    @app.route("/files/delete", methods=["POST", "OPTIONS"])
+    def delete_file():
+        if request.remote_addr != "127.0.0.1":
+            return abort(403)
+        if request.method == "OPTIONS":
+            return jsonify({"error": "the only request method is POST"})
+        conn, db = helpers.create_conn()
+        path = request.form.get("path")
+        db.execute(
+            "DELETE FROM experiment_files WHERE eid IN (SELECT id FROM files WHERE path = ?)",
+            (path,),
+        )
+        db.execute("DELETE FROM files WHERE path = ?", (path,))
+        shutil.rmtree(path)
+        conn.commit()
+        conn.close()
+        return jsonify(True)
+
+    @app.route("/files/old", methods=["GET", "OPTIONS"])
+    def files_older_than():
+        if request.remote_addr != "127.0.0.1":
+            return abort(403)
+        if request.method == "OPTIONS":
+            return jsonify({"error": "the only request method is GET"})
+        conn, db = helpers.create_conn()
+        days = request.args.get("days")
+        if days is None:
+            return jsonify({"error": "must specify days"})
+        old_inputs = db.execute(
+            "SELECT path FROM files WHERE id IN (SELECT fid FROM experiment_files WHERE eid IN (SELECT id FROM experiments WHERE created < DATE('now', '-%s days')))"
+            % (days,)
+        ).fetchall()
+        old_outputs = []
+        for f in glob.glob(
+            os.path.join(os.environ["UPLOAD_FOLDER"], "*", "completed", "*")
+        ):
+            if os.path.getmtime(f) < time.time() - int(days) * 86400:
+                old_outputs.append(f)
+        conn.close()
+        return jsonify(
+            [item for sublist in old_inputs for item in sublist] + old_outputs
+        )
 
     @app.route("/users/groups", methods=["GET", "OPTIONS"])
     @cross_origin()

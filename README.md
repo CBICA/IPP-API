@@ -19,6 +19,10 @@ The API server contains all the business logic of the IPP, connecting the fronte
 | /experiments/{id}/results    | upload experiment result files | No | No |
 | /experiments/{id}/file       | download specific experiment file | Yes | Yes |
 | /experiments/new             | create new experiment | Yes | Yes |
+| /experiments/{id}/delete     | delete experiment input files | No | No |
+| /experiments/{id}/failed     | mark experiment as failed | No | No |
+| /files/delete                | delete specific file by path | No | No |
+| /files/old                   | find files older than a specified number of days | No | No |
 | /uses/groups                 | list groups a user is in | Yes | Yes |
 | /admin/users                 | users admin panel | No | No |
 | /admin/groups                | groups admin panel | No | No |
