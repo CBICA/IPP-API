@@ -7,6 +7,6 @@ if [ $# -ne 1 ]; then
     exit 1
 fi
 
-for f in $(curl -s "http://localhost:5000/files/old?days=$1"); do
+for f in $(curl -s "http://localhost:5000/files/old?days=$1" | jq -r ".[]"); do
     curl -X POST -d "path=$f" "http://localhost:5000/files/delete"
 done

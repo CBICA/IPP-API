@@ -123,7 +123,35 @@ def create_app(test_config=None):
         conn.close()
         return jsonify(True)
 
-    @app.route("/users/approve/<id>")
+    @app.route("/users/list", methods=["GET", "OPTIONS"])
+    def list_users():
+        if request.remote_addr != "127.0.0.1":
+            abort(403)
+        conn, db = helpers.create_conn()
+        rows = db.execute(
+            "SELECT id, email, token, approved FROM users ORDER BY id DESC"
+            if not request.args.get('awaiting_approval') == "1" else
+            "SELECT id, email, token, approved FROM users WHERE approved = 0 ORDER BY id DESC"
+        ).fetchall()
+        users = []
+        for row in rows:
+            settings = db.execute(
+                "SELECT name, value FROM user_settings WHERE uid = ?", (row[0],)
+            ).fetchall()
+            user = {
+                "id": row[0],
+                "email": row[1],
+                "token": row[2],
+                "approved": row[3],
+                "settings": {},
+            }
+            for setting in settings:
+                user["settings"][setting[0]] = setting[1]
+            users.append(user)
+        conn.close()
+        return jsonify(users)
+
+    @app.route("/users/approve/<id>", methods=["GET", "OPTIONS"])
     def approve_user(id):
         if request.remote_addr != "127.0.0.1":
             abort(403)
@@ -133,7 +161,7 @@ def create_app(test_config=None):
         conn.close()
         return jsonify(True)
 
-    @app.route("/users/deny/<id>")
+    @app.route("/users/deny/<id>", methods=["GET", "OPTIONS"])
     def deny_user(id):
         if request.remote_addr != "127.0.0.1":
             abort(403)
@@ -412,7 +440,9 @@ def create_app(test_config=None):
         uid = db.execute("SELECT uid FROM experiments WHERE id = ?", (id,)).fetchone()[
             0
         ]
-        shutil.rmtree(os.path.join(os.environ["UPLOAD_FOLDER"], str(uid), "submitted", id))
+        shutil.rmtree(
+            os.path.join(os.environ["UPLOAD_FOLDER"], str(uid), "submitted", id)
+        )
         conn.close()
         return jsonify(True)
 
