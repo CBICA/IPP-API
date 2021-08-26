@@ -113,6 +113,6 @@ def extract_params(params, backend=False):
             new_params[param[0]] = (
                 param[1]
                 if not backend or not param[1].startswith(os.environ["UPLOAD_FOLDER"])
-                else "./inputs" + param[1]
+                else "inputs" + param[1]
             )
     return app, experimentDescription, experimentName, new_params
