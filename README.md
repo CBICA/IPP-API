@@ -30,6 +30,9 @@ The API server contains all the business logic of the IPP, connecting the fronte
 | /groups/remove/{id}          | delete group | No | No |
 | /groups/edit/{id}            | edit group | No | No |
 | /users/groups/map            | map user to a group | No | No |
+| /version                     | get app version | No | No |
+| /version/update              | update app version | No | No |
+| /fe-version/update           | update frontend version | No | No |
 
 ## Installation
 

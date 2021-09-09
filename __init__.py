@@ -6,6 +6,8 @@ import zipfile
 import tempfile
 import shutil
 import glob
+import sys
+import subprocess
 from datetime import datetime
 from flask import (
     Flask,
@@ -45,6 +47,7 @@ insert_map = "INSERT INTO experiment_files (eid, fid) VALUES (?, ?)"
 
 
 def create_app(test_config=None):
+    __version__ = "0.0.1"
     conn = sqlite3.connect("db.sqlite")
     db = conn.cursor()
     db.executescript(schema)
@@ -310,6 +313,7 @@ def create_app(test_config=None):
         #     except Exception as error:
         #         app.logger.error("Error removing or closing downloaded file handle", error)
         #     return response
+        conn.close()
         return send_file(
             memory_file, attachment_filename="files.zip", as_attachment=True
         )
@@ -606,6 +610,48 @@ def create_app(test_config=None):
         conn.commit()
         conn.close()
         return redirect("/admin/users")
+
+    @app.route("/version", methods=["GET", "OPTIONS"])
+    def version():
+        return jsonify({"version": __version__})
+
+    @app.route("/version/update", methods=["POST", "OPTIONS"])
+    def update_version():
+        if request.remote_addr != "127.0.0.1":
+            abort(403)
+        if 'GIT_DIR' in os.environ:
+            to_checkout = request.form.get("checkout")
+            if to_checkout is None:
+                to_checkout = "build"
+            # https://stackoverflow.com/a/16928558/2624391
+            ret = subprocess.Popen(['nohup', os.environ['GIT_DIR'] + '/utils/pull-api.sh', to_checkout] + sys.argv,
+                    stdout=open('/dev/null', 'w'),
+                    stderr=open('logfile.log', 'a'),
+                    preexec_fn=os.setpgrp
+                    )
+            print(ret)
+            sys.exit(0)
+        return jsonify({"error": "GIT_DIR not set"})
+
+    @app.route("/fe-version/update", methods=["POST", "OPTIONS"])
+    def update_version():
+        if request.remote_addr != "127.0.0.1":
+            abort(403)
+        if 'GIT_DIR' not in os.environ:
+            return jsonify({"error": "GIT_DIR not set"})
+        if 'FE_GIT_DIR' in os.environ:
+            to_checkout = request.form.get("checkout")
+            if to_checkout is None:
+                to_checkout = "build"
+            # https://stackoverflow.com/a/16928558/2624391
+            ret = subprocess.Popen(['nohup', os.environ['GIT_DIR'] + '/utils/pull-fe.sh', os.environ['FE_GIT_DIR'], to_checkout] + sys.argv,
+                    stdout=open('/dev/null', 'w'),
+                    stderr=open('logfile.log', 'a'),
+                    preexec_fn=os.setpgrp
+                    )
+            print(ret)
+            sys.exit(0)
+        return jsonify({"error": "FE_GIT_DIR not set"})
 
     if __name__ == "__main__":
         port = 8080
