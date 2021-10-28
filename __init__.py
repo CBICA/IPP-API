@@ -329,6 +329,7 @@ def create_app(test_config=None):
         db.execute(
             "UPDATE experiments SET status = ? WHERE id = ?", (STATUS_COMPLETED, id)
         )
+        conn.commit()
         conn.close()
         user_folder = os.path.join(os.environ["UPLOAD_FOLDER"], str(uid))
         completed_job_folder = os.path.join(user_folder, "completed", str(id))
@@ -444,10 +445,13 @@ def create_app(test_config=None):
         uid = db.execute("SELECT uid FROM experiments WHERE id = ?", (id,)).fetchone()[
             0
         ]
-        shutil.rmtree(
-            os.path.join(os.environ["UPLOAD_FOLDER"], str(uid), "submitted", id)
-        )
         conn.close()
+        try:
+            shutil.rmtree(
+                os.path.join(os.environ["UPLOAD_FOLDER"], str(uid), "submitted", id)
+            )
+        except FileNotFoundError:
+            return jsonify(False)
         return jsonify(True)
 
     @app.route("/experiments/<id>/failed", methods=["POST", "OPTIONS"])
@@ -634,7 +638,7 @@ def create_app(test_config=None):
         return jsonify({"error": "GIT_DIR not set"})
 
     @app.route("/fe-version/update", methods=["POST", "OPTIONS"])
-    def update_version():
+    def update_frontend_version():
         if request.remote_addr != "127.0.0.1":
             abort(403)
         if 'GIT_DIR' not in os.environ:
@@ -660,6 +664,10 @@ def create_app(test_config=None):
             port = int(os.environ["FLASK_RUN_PORT"])
         if "FLASK_RUN_HOST" in os.environ:
             host = os.environ["FLASK_RUN_HOST"]
+        if sys.version_info < (3, 0):
+            print("Python 3 required")
+            sys.exit(1)
+        print("Running with", sys.version_info)
         app.run(host=host, port=port)
 
     return app
