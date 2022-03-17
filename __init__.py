@@ -56,10 +56,11 @@ def create_app(test_config=None):
     app = Flask(__name__, instance_relative_config=True)
     CORS(app)
     app.config["CORS_HEADERS"] = "no-cors"
+    prefix = "/api"
 
     # Routes
 
-    @app.route("/notifications/notify", methods=["POST", "OPTIONS"])
+    @app.route(f"{prefix}/notifications/notify", methods=["POST", "OPTIONS"])
     def notify():
         if request.remote_addr != "127.0.0.1":
             abort(403)
@@ -85,7 +86,7 @@ def create_app(test_config=None):
             )
         conn.close()
 
-    @app.route("/users/new", methods=["POST", "OPTIONS"])
+    @app.route(f"{prefix}/users/new", methods=["POST", "OPTIONS"])
     @cross_origin()
     def create_user():
         if request.form.get("password") != request.form.get("confirm-password"):
@@ -108,7 +109,7 @@ def create_app(test_config=None):
         # return jsonify({"token": token})
         return jsonify(True)
 
-    @app.route("/users/settings/set", methods=["POST", "OPTIONS"])
+    @app.route(f"{prefix}/users/settings/set", methods=["POST", "OPTIONS"])
     @cross_origin()
     def set_settings():
         conn, db = helpers.create_conn()
@@ -126,7 +127,7 @@ def create_app(test_config=None):
         conn.close()
         return jsonify(True)
 
-    @app.route("/users/list", methods=["GET", "OPTIONS"])
+    @app.route(f"{prefix}/users/list", methods=["GET", "OPTIONS"])
     def list_users():
         if request.remote_addr != "127.0.0.1":
             abort(403)
@@ -154,7 +155,7 @@ def create_app(test_config=None):
         conn.close()
         return jsonify(users)
 
-    @app.route("/users/approve/<id>", methods=["GET", "OPTIONS"])
+    @app.route(f"{prefix}/users/approve/<id>", methods=["GET", "OPTIONS"])
     def approve_user(id):
         if request.remote_addr != "127.0.0.1":
             abort(403)
@@ -164,7 +165,7 @@ def create_app(test_config=None):
         conn.close()
         return jsonify(True)
 
-    @app.route("/users/deny/<id>", methods=["GET", "OPTIONS"])
+    @app.route(f"{prefix}/users/deny/<id>", methods=["GET", "OPTIONS"])
     def deny_user(id):
         if request.remote_addr != "127.0.0.1":
             abort(403)
@@ -174,7 +175,7 @@ def create_app(test_config=None):
         conn.close()
         return jsonify(True)
 
-    @app.route("/users/auth", methods=["POST", "OPTIONS"])
+    @app.route(f"{prefix}/users/auth", methods=["POST", "OPTIONS"])
     @cross_origin()
     def auth_user():
         conn, db = helpers.create_conn()
@@ -193,7 +194,7 @@ def create_app(test_config=None):
         conn.close()
         return jsonify({"token": None, "error": "invalid credentials"})
 
-    @app.route("/experiments", methods=["GET", "OPTIONS"])
+    @app.route(f"{prefix}/experiments", methods=["GET", "OPTIONS"])
     @cross_origin()
     def experiments():
         conn, db = helpers.create_conn()
@@ -245,7 +246,7 @@ def create_app(test_config=None):
         conn.close()
         return jsonify({"experiments": res})
 
-    @app.route("/experiments/queue", methods=["GET", "OPTIONS"])
+    @app.route(f"{prefix}/experiments/queue", methods=["GET", "OPTIONS"])
     def experiment_queue():
         if request.remote_addr != "127.0.0.1":
             abort(403)
@@ -292,7 +293,7 @@ def create_app(test_config=None):
         conn.close()
         return jsonify(experiments)
 
-    @app.route("/experiments/<id>/files", methods=["GET", "OPTIONS"])
+    @app.route(f"{prefix}/experiments/<id>/files", methods=["GET", "OPTIONS"])
     # https://stackoverflow.com/a/24613980
     # https://stackoverflow.com/a/27337047
     def download_files(id):
@@ -318,7 +319,7 @@ def create_app(test_config=None):
             memory_file, attachment_filename="files.zip", as_attachment=True
         )
 
-    @app.route("/experiments/<id>/results", methods=["POST", "OPTIONS"])
+    @app.route(f"{prefix}/experiments/<id>/results", methods=["POST", "OPTIONS"])
     def upload_results(id):
         if request.remote_addr != "127.0.0.1":
             abort(403)
@@ -339,7 +340,7 @@ def create_app(test_config=None):
             file.save(dest)
         return jsonify(True)
 
-    @app.route("/experiments/<id>/file", methods=["GET", "OPTIONS"])
+    @app.route(f"{prefix}/experiments/<id>/file", methods=["GET", "OPTIONS"])
     @cross_origin()
     def static_file(id):
         conn, db = helpers.create_conn()
@@ -362,7 +363,7 @@ def create_app(test_config=None):
     # there's an "editing" (ignored by backend) and "completed" namespace.
     # The location of an experiments files determines the status.
     # When the IPP backend runs job, output should be placed in `UPLOAD_FOLDER/uid/completed/eid`
-    @app.route("/experiments/new", methods=["POST", "OPTIONS"])
+    @app.route(f"{prefix}/experiments/new", methods=["POST", "OPTIONS"])
     @cross_origin()
     def new_experiment():
         conn, db = helpers.create_conn()
@@ -435,7 +436,7 @@ def create_app(test_config=None):
         conn.close()
         return jsonify(True)
 
-    @app.route("/experiments/<id>/delete", methods=["DELETE", "OPTIONS"])
+    @app.route(f"{prefix}/experiments/<id>/delete", methods=["DELETE", "OPTIONS"])
     def delete_experiment_inputs(id):
         if request.remote_addr != "127.0.0.1":
             return abort(403)
@@ -454,7 +455,7 @@ def create_app(test_config=None):
             return jsonify(False)
         return jsonify(True)
 
-    @app.route("/experiments/<id>/failed", methods=["POST", "OPTIONS"])
+    @app.route(f"{prefix}/experiments/<id>/failed", methods=["POST", "OPTIONS"])
     def mark_failed(id):
         if request.remote_addr != "127.0.0.1":
             return abort(403)
@@ -468,7 +469,7 @@ def create_app(test_config=None):
         conn.close()
         return jsonify(True)
 
-    @app.route("/files/delete", methods=["POST", "OPTIONS"])
+    @app.route(f"{prefix}/files/delete", methods=["POST", "OPTIONS"])
     def delete_file():
         if request.remote_addr != "127.0.0.1":
             return abort(403)
@@ -486,7 +487,7 @@ def create_app(test_config=None):
         conn.close()
         return jsonify(True)
 
-    @app.route("/files/old", methods=["GET", "OPTIONS"])
+    @app.route(f"{prefix}/files/old", methods=["GET", "OPTIONS"])
     def files_older_than():
         if request.remote_addr != "127.0.0.1":
             return abort(403)
@@ -511,7 +512,7 @@ def create_app(test_config=None):
             [item for sublist in old_inputs for item in sublist] + old_outputs
         )
 
-    @app.route("/users/groups", methods=["GET", "OPTIONS"])
+    @app.route(f"{prefix}/users/groups", methods=["GET", "OPTIONS"])
     @cross_origin()
     def get_groups():
         conn, db = helpers.create_conn()
@@ -524,7 +525,7 @@ def create_app(test_config=None):
         conn.close()
         return jsonify({"groups": [g[0] for g in groups]})
 
-    @app.route("/admin/users", methods=["GET", "OPTIONS"])
+    @app.route(f"{prefix}/admin/users", methods=["GET", "OPTIONS"])
     def user_admin_panel():
         if request.remote_addr != "127.0.0.1":
             abort(403)
@@ -554,7 +555,7 @@ def create_app(test_config=None):
         conn.close()
         return render_template("users.html", users=users, groups=groups)
 
-    @app.route("/admin/groups", methods=["GET", "OPTIONS"])
+    @app.route(f"{prefix}/admin/groups", methods=["GET", "OPTIONS"])
     def group_admin_panel():
         if request.remote_addr != "127.0.0.1":
             abort(403)
@@ -566,7 +567,7 @@ def create_app(test_config=None):
         conn.close()
         return render_template("groups.html", groups=groups)
 
-    @app.route("/groups/create", methods=["POST", "OPTIONS"])
+    @app.route(f"{prefix}/groups/create", methods=["POST", "OPTIONS"])
     def create_group():
         if request.remote_addr != "127.0.0.1":
             abort(403)
@@ -576,7 +577,7 @@ def create_app(test_config=None):
         conn.close()
         return redirect("/admin/groups")
 
-    @app.route("/groups/remove/<id>", methods=["POST", "OPTIONS"])
+    @app.route(f"{prefix}/groups/remove/<id>", methods=["POST", "OPTIONS"])
     def remove_group(id):
         if request.remote_addr != "127.0.0.1":
             abort(403)
@@ -587,7 +588,7 @@ def create_app(test_config=None):
         conn.close()
         return redirect("/admin/groups")
 
-    @app.route("/groups/edit/<id>", methods=["POST", "OPTIONS"])
+    @app.route(f"{prefix}/groups/edit/<id>", methods=["POST", "OPTIONS"])
     def edit_group(id):
         if request.remote_addr != "127.0.0.1":
             abort(403)
@@ -603,7 +604,7 @@ def create_app(test_config=None):
         conn.close()
         return redirect("/admin/groups")
 
-    @app.route("/users/groups/map", methods=["POST", "OPTIONS"])
+    @app.route(f"{prefix}/users/groups/map", methods=["POST", "OPTIONS"])
     def map_user_to_group():
         if request.remote_addr != "127.0.0.1":
             abort(403)
@@ -615,11 +616,11 @@ def create_app(test_config=None):
         conn.close()
         return redirect("/admin/users")
 
-    @app.route("/version", methods=["GET", "OPTIONS"])
+    @app.route(f"{prefix}/version", methods=["GET", "OPTIONS"])
     def version():
         return jsonify({"version": __version__})
 
-    @app.route("/version/update", methods=["POST", "OPTIONS"])
+    @app.route(f"{prefix}/version/update", methods=["POST", "OPTIONS"])
     def update_version():
         if request.remote_addr != "127.0.0.1":
             abort(403)
@@ -637,7 +638,7 @@ def create_app(test_config=None):
             sys.exit(0)
         return jsonify({"error": "GIT_DIR not set"})
 
-    @app.route("/fe-version/update", methods=["POST", "OPTIONS"])
+    @app.route(f"{prefix}/fe-version/update", methods=["POST", "OPTIONS"])
     def update_frontend_version():
         if request.remote_addr != "127.0.0.1":
             abort(403)
